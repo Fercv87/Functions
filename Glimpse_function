@@ -1,0 +1,362 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+from IPython.display import display, HTML
+import matplotlib.pyplot as plt
+import seaborn as sns
+import matplotlib.pyplot as plt
+from itertools import permutations
+from itertools import combinations
+import pandas as pd
+from dateutil.relativedelta import relativedelta
+import logging
+import inspect
+
+
+# Set the colorblind palette for all plots
+sns.set_palette("colorblind")
+# Setting the context for the plots
+sns.set_context('paper')
+
+# Create a function to glimpse the data
+def Glimpse(df):
+    # Existing logic here
+    # Get the name of the dataframe variable
+    # Get the name of the dataframe variable
+    
+    try:
+        df_name = [name for name in globals() if globals()[name] is df][0]
+    except IndexError:
+        df_name = "the DataFrame"        
+    
+    # Create a styled string using HTML
+    styled_string = f'<h3>Shape of DataFrame ("{df_name}"): {df.shape[0]} rows and {df.shape[1]} columns</h3>'
+    
+    # Display the styled string
+    display(HTML(styled_string))
+    
+    # Display info
+    display(HTML(f'<h4>DataFrame Info ("{df_name}"):</h4>'))
+    display(df.info())
+    
+    # Head & Tail
+    display(HTML(f'<h4>First 5 Rows ("{df_name}"):</h4>'))
+    display(df.head())
+    display(HTML(f'<h4>Last 5 Rows ("{df_name}"):</h4>'))
+    display(df.tail())
+        
+    # Summary Statistics
+    display(HTML(f'<h4>Summary Statistics ("{df_name}"):</h4>'))
+
+    # Calculate median, mode, variance, and mean absolute deviation
+    median_values = df.median(numeric_only=True)
+    mode_values = df.mode().iloc[0]
+    variance_values = df.var(numeric_only=True)
+    mad_values = (df.select_dtypes(include=['number']) - df.select_dtypes(include=['number']).mean()).abs().mean()
+
+    # Initialize empty DataFrame to hold additional statistics
+    additional_stats_df = pd.DataFrame()
+
+    # Calculate IQR and outliers for numerical columns
+    num_columns = df.select_dtypes(include=['number']).columns
+    for col in num_columns:
+        q1 = df[col].quantile(0.25)
+        q3 = df[col].quantile(0.75)
+        iqr = q3 - q1
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+        outliers = df[col][(df[col] < lower) | (df[col] > upper)]
+        outliers_count = len(outliers)
+        outliers_percentage = (outliers_count / len(df[col])) * 100
+
+        additional_stats_df.loc['iqr', col] = iqr
+        additional_stats_df.loc['lower', col] = lower  
+        additional_stats_df.loc['upper', col] = upper 
+        additional_stats_df.loc['outliers_count', col] = outliers_count
+        additional_stats_df.loc['outliers_percentage', col] = outliers_percentage
+
+     # Create a copy of the original DataFrame to remove outliers
+    df_no_outliers = df.copy()
+
+    # Loop through numerical columns to remove outliers
+    num_columns = df.select_dtypes(include=['number']).columns
+    for col in num_columns:
+        q1 = df[col].quantile(0.25)
+        q3 = df[col].quantile(0.75)
+        iqr = q3 - q1
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+
+        # Filter out outliers for the column
+        df_no_outliers = df_no_outliers[(df_no_outliers[col] >= lower) & (df_no_outliers[col] <= upper)]
+
+    # Rename the DataFrame
+    df_name_no_outliers = df_name + "_no_outliers"
+    globals()[df_name_no_outliers] = df_no_outliers
+
+    # Print the shape of the new DataFrame
+    print(f"Shape of the original DataFrame '{df_name}': {df.shape}")
+    print(f"Shape of the DataFrame without outliers '{df_name_no_outliers}': {df_no_outliers.shape}")
+
+    # Generate and display the Python code snippet for removing outliers
+    code_snippet = f"""
+    # Code Snippet to Remove Outliers from '{df_name}'
+    {df_name}_no_outliers = {df_name}.copy()
+    num_columns = {df_name}.select_dtypes(include=['number']).columns
+    for col in num_columns:
+        q1 = {df_name}[col].quantile(0.25)
+        q3 = {df_name}[col].quantile(0.75)
+        iqr = q3 - q1
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+        {df_name}_no_outliers = {df_name}_no_outliers[({df_name}_no_outliers[col] >= lower) & ({df_name}_no_outliers[col] <= upper)]
+    """
+
+    print("\nPython Code Snippet for Removing Outliers:")
+    print("-------------------------------------------------")
+    print(code_snippet)
+
+      
+    # Create a DataFrame for median, mode, variance, and mean absolute deviation
+    other_stats_df = pd.DataFrame({
+        'median': median_values,
+        'mode': mode_values,
+        'variance': variance_values,
+        'mad': mad_values
+    })
+
+    # Calculate IQR, outliers, and standard deviation percentages for numerical columns
+    num_columns = df.select_dtypes(include=['number']).columns
+    for col in num_columns:
+        mean_value = df[col].mean()
+        std_value = df[col].std()
+    
+    # Calculate percentages of data within 1, 2, and 3 standard deviations
+    within_one_std = len(df[col][(df[col] >= mean_value - std_value) & (df[col] <= mean_value + std_value)]) / len(df[col]) * 100
+    within_two_std = len(df[col][(df[col] >= mean_value - 2 * std_value) & (df[col] <= mean_value + 2 * std_value)]) / len(df[col]) * 100
+    within_three_std = len(df[col][(df[col] >= mean_value - 3 * std_value) & (df[col] <= mean_value + 3 * std_value)]) / len(df[col]) * 100
+    
+    additional_stats_df.loc['within_one_std', col] = within_one_std
+    additional_stats_df.loc['within_two_std', col] = within_two_std
+    additional_stats_df.loc['within_three_std', col] = within_three_std
+        
+    # Reset index for describe() DataFrame, other_stats_df, and additional_stats_df
+    describe_df = df.describe().reset_index()
+    other_stats_df = other_stats_df.T.reset_index()
+    additional_stats_df = additional_stats_df.reset_index()
+
+    # Rename the 'index' column to 'statistic' for all DataFrames
+    describe_df.rename(columns={'index': 'statistic'}, inplace=True)
+    other_stats_df.rename(columns={'index': 'statistic'}, inplace=True)
+    additional_stats_df.rename(columns={'index': 'statistic'}, inplace=True)
+
+    # Concatenate with describe() DataFrame and other DataFrames
+    summary_stats = pd.concat([describe_df, other_stats_df, additional_stats_df])
+
+    # Set 'statistic' as the index again
+    summary_stats.set_index('statistic', inplace=True)
+    
+    # Round all numerical values to 2 decimal places
+    summary_stats = summary_stats.applymap(lambda x: round(x, 2) if isinstance(x, (int, float)) else x)
+
+    def highlight_outliers(val):
+        if val > 10:
+            color = 'red'  # red for high percentage of outliers
+        elif val > 5:
+            color = 'yellow'  # yellow for moderate
+        else:
+            color = 'green'  # green for low
+        return f'background-color: {color}'
+    def highlight_variance(val):
+        if pd.isna(val) or not isinstance(val, (int, float)):
+            return ''  # Return an empty string or some other default style for non-numeric or missing values
+        if val > 100:  # You can adjust this threshold as needed
+            color = 'red'  # red for high variance
+        elif val > 50:  # You can adjust this threshold as needed
+            color = 'yellow'  # yellow for moderate
+        else:
+            color = 'green'  # green for low
+        return f'background-color: {color}'
+    def highlight_mad(val):
+        if pd.isna(val) or not isinstance(val, (int, float)):
+            return ''  # Return an empty string or some other default style for non-numeric or missing values
+        if val > 20:  # You can adjust this threshold as needed
+            color = 'red'  # red for high MAD
+        elif val > 10:  # You can adjust this threshold as needed
+            color = 'yellow'  # yellow for moderate
+        else:
+            color = 'green'  # green for low
+        return f'background-color: {color}'
+
+
+    # Apply the color to the 'variance' and 'mad' and 'outliers_percentage' row rows
+    styled_summary_stats = summary_stats.style.applymap(highlight_variance,subset=pd.IndexSlice['variance', :]) \
+                                         .applymap(highlight_mad,subset=pd.IndexSlice['mad', :]) \
+                                        .applymap(highlight_outliers,subset=pd.IndexSlice['outliers_percentage', :])
+
+    display(styled_summary_stats)
+    
+    # Calculate and display the correlation coefficients for numerical variables
+    display(HTML(f'<h4>Correlation Coefficients ("{df_name}"):</h4>'))
+    correlation_matrix = df[num_columns].corr()
+    
+    # Round all numerical values to 2 decimal places
+    correlation_matrix = correlation_matrix.applymap(lambda x: round(x, 2) if isinstance(x, (int, float)) else x)
+    
+    # Apply the color gradient
+    styled_corr_matrix = correlation_matrix.style.background_gradient(cmap='RdYlGn', axis=None).format("{:.2f}")
+
+    display(styled_corr_matrix)    
+    
+    # Assume df is your DataFrame and df_name is its name
+    # Assume num_columns is the list of numerical columns
+
+    def color_cells(val):
+        if pd.isna(val):
+            return ''
+        elif val >= 0.9 or val <= -0.9:
+            return 'background-color: red'
+        elif val >= 0.7 or val <= -0.7:
+            return 'background-color: orange'
+        elif val >= 0.5 or val <= -0.5:
+            return 'background-color: yellow'
+        elif val >= 0.3 or val <= -0.3:
+            return 'background-color: lightgreen'
+        else:
+            return 'background-color: green'
+    # Calculate and display the correlation coefficients for numerical variables
+    display(HTML(f'<h4>Correlation Coefficients2 ("{df_name}"):</h4>'))
+    correlation_matrix = df[num_columns].corr()
+
+    # Set the diagonal and upper triangle to NaN
+    correlation_matrix.values[np.triu_indices_from(correlation_matrix, 0)] = np.nan
+
+    # Round all numerical values to 2 decimal places
+    correlation_matrix = correlation_matrix.applymap(lambda x: round(x, 2) if isinstance(x, (int, float)) else x)
+
+    # Apply the color gradient
+    styled_corr_matrix = correlation_matrix.style.applymap(color_cells).format("{:.2f}")
+
+    display(styled_corr_matrix)
+
+    # Summarize correlations
+    summary_text = []
+    for i, col in enumerate(num_columns):
+        for j, row in enumerate(num_columns):
+            if i < j:  # Only consider lower triangle
+                corr = correlation_matrix.loc[row, col]  # Corrected order of indices
+                if not pd.isna(corr):  # Ignore NaN values
+                    if corr >= 0.9 or corr <= -0.9:
+                        interpretation = "Very high positive (negative) correlation"
+                    elif corr >= 0.7 or corr <= -0.7:
+                        interpretation = "High positive (negative) correlation"
+                    elif corr >= 0.5 or corr <= -0.5:
+                        interpretation = "Moderate positive (negative) correlation"
+                    elif corr >= 0.3 or corr <= -0.3:
+                        interpretation = "Low positive (negative) correlation"
+                    else:
+                        interpretation = "Negligible correlation"
+                    summary_text.append(f'{col} and {row}: {corr:.2f} - {interpretation}')
+
+    # Display summary
+    summary_html = '<br>'.join(summary_text)
+    display(HTML(f'<h4>Correlation Summary:</h4><p>{summary_html}</p>'))
+
+    # Missing Values
+    missing_values = df.isnull().sum()
+    display(HTML(f'<h4>Missing Values ("{df_name}"):</h4>'))
+    display(missing_values[missing_values > 0])
+    
+    # Bar Chart for Missing Values
+    if missing_values.sum() > 0:
+        plt.figure(figsize=(12, 6))
+        missing_sorted = missing_values[missing_values > 0].sort_values(ascending=True)
+        bars = missing_sorted.plot(kind='barh', color='salmon', edgecolor='black')
+        
+        # Annotate each bar with the number of records
+        for bar in bars.patches:
+            plt.text(bar.get_width(), bar.get_y() + bar.get_height()/2, 
+                     f'{int(bar.get_width())}', 
+                     va='center', ha='left', color='black', fontsize=10)
+        
+        plt.title('Volume of Missing Values per Variable')
+        plt.xlabel('Number of Missing Values')
+        plt.ylabel('Variables')
+        plt.grid(axis='x')
+        plt
+        
+    # Count the number of missing values in each column
+    missing_counts = df.isna().sum()
+    display(HTML(f'<h4>Number of Missing Values for Each Column ("{df_name}"):</h4>'))
+    display(missing_counts)
+    # Find the five percent threshold
+    threshold = len(df) * 0.05
+    # Create a filter
+    cols_to_drop = df.columns[df.isna().sum() > threshold]
+    display(HTML(f'<h4>Potential Columns to Drop Due to Significant Missing Values ("{df_name}"):</h4>'))
+    display(cols_to_drop)
+    # Display code snippet for dropping columns with significant missing values
+    new_df_name = df_name + "_No_Missings"
+    code_snippet = f"{new_df_name} = {df_name}.dropna(subset={list(cols_to_drop)}, inplace=False)"
+    display(HTML(f'<h4>Python Code Snippet for Dropping Columns with Significant Missing Values:</h4>'))
+    print(code_snippet)
+    
+    # Unique Values
+    unique_values = df.nunique()
+    display(HTML(f'<h4>Number of Unique Values ("{df_name}"):</h4>'))
+    display(unique_values)
+    # Display unique values for columns with <= 20 unique values
+    display(HTML(f'<h4>Unique Values for Columns with <= 20 Unique Values:</h4>'))
+    for col in df.columns:
+        if df[col].nunique() <= 20:
+            unique_vals = ', '.join(map(str, df[col].unique()))
+            display(HTML(f'<p><b>{col}</b>: {unique_vals}</p>'))
+
+               
+    # Index Information
+    display(HTML(f'<h4>Index Information ("{df_name}"):</h4>'))
+    display(df.index)
+    
+   # Identify and suggest column data types
+
+    suggestions = {}
+    code_snippets = []
+    for col in df.columns:
+        dtype = df[col].dtype
+        if dtype == 'object':
+            # Check if the column can be converted to datetime
+            try:
+                pd.to_datetime(df[col])
+                suggestions[col] = 'datetime'
+                code_snippets.append(f" df['{col}'] = pd.to_datetime(df['{col}'])")
+            except:
+                # Check if the column can be converted to a category
+                if df[col].nunique() / df.shape[0] < 0.05:  # 5% threshold for unique values
+                    suggestions[col] = 'category'
+                    code_snippets.append(f" df['{col}'] = df['{col}'].astype('category')")
+        elif dtype == 'int64' or dtype == 'float64':
+            # Check if the column can be converted to int (no decimal values)
+            if df[col].dropna().apply(lambda x: float(x).is_integer()).all():  # Modified line
+                suggestions[col] = 'int'
+                code_snippets.append(f" df['{col}'] = df['{col}'].astype('int')")
+            else:
+                suggestions[col] = 'float'
+                code_snippets.append(f" df['{col}'] = df['{col}'].astype('float')")
+
+    # Display suggestions
+    display(HTML(f'<h4>Suggestions for Column Data Types ("{df_name}"):</h4>'))
+    for col, suggestion in suggestions.items():
+        if str(df[col].dtype) != suggestion:
+            print(f"Column '{col}' of type '{df[col].dtype}' could be '{suggestion}'")
+
+    # Display code snippets
+    display(HTML(f'<h4>Python Code Snippets for Suggested Changes:</h4>'))
+    for snippet in code_snippets:
+        # Replace 'df' with the actual dataframe name
+        updated_snippet = snippet.replace("df", df_name)
+        print(updated_snippet)        
+    
+    # Potential Primary Keys
+    potential_keys = unique_values[unique_values == df.shape[0]]
+    display(HTML(f'<h4>Potential Primary Keys ("{df_name}"):</h4>'))
+    display(potential_keys)
