@@ -1,0 +1,136 @@
+import pandas as pd
+from dateutil.relativedelta import relativedelta
+import logging
+
+
+# Set up logging configuration (if you haven't already)
+logging.basicConfig(level=logging.INFO)  # Change to logging.DEBUG for more detailed output
+
+
+# Assume df is your DataFrame
+# date_columns = ['date_col1', 'date_col2']
+# process_dates(df, date_columns)
+
+#transformations={'YYYYMMDD':True,'YYYYMM':True,'YYYY':True,'MM':True,'DD': True,'DayOfWeek': True,'Quarter':True,'IsWeekend':True}
+
+#calculate_deltas={'days': True, 'months': True, 'years': True})
+
+
+def process_dates(df, date_columns, date_format=None,transformations=None, calculate_deltas=None):
+    logging.info(f'Processing dates for columns: {date_columns}')
+
+    """
+    This function processes date columns in a DataFrame, converting them to datetime
+    and creating additional columns with formatted date information.
+    
+    Date Format Examples:
+    ---------------------
+    ISO 8601 Format:
+        'YYYY-MM-DD' or 'YYYYMMDD': '%Y-%m-%d' or '%Y%m%d'
+    
+    European Date Format:
+        'DD/MM/YYYY': '%d/%m/%Y'
+        'DD-MM-YYYY': '%d-%m-%Y'
+    
+    Other Common Formats:
+        'DD-Mon-YYYY': '%d-%b-%Y'
+    
+    Time Included:
+        'MM/DD/YYYY HH:MM': '%m/%d/%Y %H:%M'
+    
+    The date_format argument in your process_dates function is used 
+    for parsing the date strings into datetime objects, not for formatting the output. 
+    The pd.to_datetime() function uses this argument 
+    to understand the format of the date strings it's converting. 
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        The DataFrame containing the date columns to process.
+    date_columns : list of str
+        The names of the date columns to process.
+    date_format : str, optional
+        The date format to use when parsing dates. Default is None.
+    transformations : dict, optional
+        A dictionary specifying which transformations to apply. Default is all transformations.
+    calculate_deltas : bool, optional
+        Whether to calculate the day differences between each pair of date columns. Default is False.
+    
+    Returns:
+    --------
+    None
+    """
+    if transformations is None:
+        transformations = {
+            'YYYYMMDD': True,
+            'YYYYMM': True,
+            'YYYY': True, 
+            'MM': True, 
+            'DD': True,
+            'DayOfWeek': True,
+            'Quarter': True,
+            'IsWeekend': True
+        }
+    
+    for date_col in date_columns:
+        try:
+            # Attempt to convert the column to datetime
+            df[date_col] = pd.to_datetime(df[date_col], format=date_format)
+        except KeyError:
+            logging.error(f"Column {date_col} does not exist.")
+            continue  # Skip to the next column if it does not exist
+        except Exception as e:
+            logging.error(f"Could not convert column {date_col} to datetime: {e}")
+            continue  # Skip to the next column if conversion fails
+        
+        # If conversion is successful, create additional columns based on transformations
+        if transformations.get('YYYYMMDD', False):
+            df[f'{date_col}_YYYYMMDD'] = df[date_col].dt.strftime('%Y%m%d').astype(int)
+        if transformations.get('YYYYMM', False):
+            df[f'{date_col}_YYYYMM'] = df[date_col].dt.strftime('%Y%m').astype(int)
+        if transformations.get('YYYY', False):
+            df[f'{date_col}_YYYY'] = df[date_col].dt.year
+        if transformations.get('MM', False):
+            df[f'{date_col}_MM'] = df[date_col].dt.month
+        if transformations.get('DD', False):
+            df[f'{date_col}_DD'] = df[date_col].dt.day
+        if transformations.get('DayOfWeek', False):
+            df[f'{date_col}_DayOfWeek'] = df[date_col].dt.dayofweek
+        if transformations.get('Quarter', False):
+            df[f'{date_col}_Quarter'] = df[date_col].dt.quarter
+        if transformations.get('IsWeekend', False):
+            df[f'{date_col}_IsWeekend'] = df[date_col].dt.weekday.isin([5, 6])
+    
+    if calculate_deltas:
+        for i, date_col1 in enumerate(date_columns):
+            for date_col2 in date_columns[i + 1:]:
+                if calculate_deltas.get('days', False):
+                    # Calculate difference in days
+                    delta_col_name_days = f'{date_col1}_to_{date_col2}_days'
+                    df[delta_col_name_days] = (df[date_col2] - df[date_col1]).dt.days
+                
+                if calculate_deltas.get('months', False) or calculate_deltas.get('years', False):
+                    # Initialize empty lists to store the month and year differences
+                    month_diffs = []
+                    year_diffs = []
+                    
+                    for date1, date2 in zip(df[date_col1], df[date_col2]):
+                        if pd.notnull(date1) and pd.notnull(date2):
+                            # Calculate the relative difference
+                            rdelta = relativedelta(date2, date1)
+                            month_diffs.append(rdelta.years * 12 + rdelta.months)
+                            year_diffs.append(rdelta.years)
+                        else:
+                            # Append NaN for missing values
+                            month_diffs.append(None)
+                            year_diffs.append(None)
+                    
+                    if calculate_deltas.get('months', False):
+                        # Assign the month differences to a new column in the DataFrame
+                        delta_col_name_months = f'{date_col1}_to_{date_col2}_months'
+                        df[delta_col_name_months] = month_diffs
+                    
+                    if calculate_deltas.get('years', False):
+                        # Assign the year differences to a new column in the DataFrame
+                        delta_col_name_years = f'{date_col1}_to_{date_col2}_years'
+                        df[delta_col_name_years] = year_diffs
