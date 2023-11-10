@@ -1,0 +1,110 @@
+import pandas as pd
+import inspect
+import chardet
+
+
+def calculate_memory_savings(df, columns=None):
+    # Get the name of the DataFrame variable
+    frame = inspect.currentframe()
+    frame_info = inspect.getframeinfo(frame.f_back)
+    df_name = frame_info.code_context[0].split('(')[1].split(')')[0].split(',')[0]    
+    
+    # If columns is None, use all columns from the DataFrame
+    if columns is None:
+        columns = df.columns.tolist()
+
+    # Create an empty list to store the memory usage information
+    memory_savings_data = []
+
+    # Loop through each column name provided in the columns list
+    for column in columns:
+        # Ensure the column exists in the DataFrame
+        if column in df.columns:
+            # Get the original data type of the column
+            original_dtype = df[column].dtype
+
+            # Get the memory usage of the column in its original datatype
+            memory_as_source = df[column].nbytes
+
+            # Get the memory usage of the column as a category datatype
+            memory_as_category = df[column].astype('category').nbytes
+
+            # Calculate the ratio of memory usage as category to source
+            ratio_cat_by_source = memory_as_category / memory_as_source
+
+            # Calculate the ratio of saved memory
+            ratio_saved_memory = 1 - ratio_cat_by_source
+
+            # Format the ratios as percentages with 2 decimal places
+            ratio_cat_by_source_percent = f"{ratio_cat_by_source * 100:.2f}%"
+            ratio_saved_memory_percent = f"{ratio_saved_memory * 100:.2f}%"
+
+            # Get the count of unique values using the nunique method
+            unique_count = df[column].nunique()
+
+            # Get the count of NaN values
+            nan_count = df[column].isna().sum()
+
+            # Get the count of zeros
+            zero_count = (df[column] == 0).sum()
+
+            # Get the value counts
+            value_counts = df[column].value_counts()
+
+            # Get the most and least frequent values
+            most_frequent_value = value_counts.idxmax()
+            least_frequent_value = value_counts.idxmin()
+
+            # Append the information to the memory_savings_data list
+            memory_savings_data.append({
+                'variable_name': column,
+                'original_dtype': original_dtype,
+                'unique_count': unique_count,
+                'ratio_saved_memory': ratio_saved_memory_percent,
+                #'memory_as_category': memory_as_category,
+                #'memory_as_source': memory_as_source,
+                'nan_count': nan_count,
+                'zero_count': zero_count,
+                'most_frequent_value': most_frequent_value,
+                'least_frequent_value': least_frequent_value
+            })
+        else:
+            print(f"Column {column} does not exist in the DataFrame.")
+
+    # Convert the memory_savings_data list to a DataFrame
+    memory_savings_df = pd.DataFrame(memory_savings_data)
+
+    # Convert the ratio_saved_memory column to float for sorting
+    memory_savings_df['ratio_saved_memory_float'] = memory_savings_df['ratio_saved_memory'].str.rstrip('%').astype(float)
+
+    # Get the variable names with a ratio_saved_memory above 50%
+    to_convert = memory_savings_df[memory_savings_df['ratio_saved_memory_float'] > 50]['variable_name']
+
+    # Generate the Python code for converting these variables to category data type
+    conversion_code = "\n".join(f"{df_name}['{column}'] = {df_name}['{column}'].astype('category')" for column in to_convert)
+
+    # Sort the DataFrame based on the ratio_saved_memory_float column in descending order
+    memory_savings_df = memory_savings_df.sort_values(by='ratio_saved_memory_float', ascending=False).drop(columns='ratio_saved_memory_float')
+
+     # Display the DataFrame in a tabular format
+    display(memory_savings_df)
+
+    # Return the conversion code
+    return conversion_code
+
+
+
+# Example usage:
+# memory_savings_df = calculate_memory_savings(used_cars)  # This will use all columns
+# print(memory_savings_df)
+
+def detect_file_encoding(file_path):
+    """Detect the encoding of a given file."""
+    with open(file_path, 'rb') as file:
+        result = chardet.detect(file.read())
+    return result['encoding']
+
+# Example usage:
+#file_path = 'C:\\Users\\fercv\\OneDrive\\Desktop\\\AI_Master_Degree\\Data_Vis_Introduction\\Datasets\\delitos_por_municipio.csv'  # Replace with the path to your file
+#detected_encoding = detect_file_encoding(file_path)
+#print(f"The detected encoding of the file is: {detected_encoding}")
