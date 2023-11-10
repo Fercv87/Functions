@@ -1,0 +1,176 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+from itertools import permutations
+from itertools import combinations
+
+def visualize_data(df, num_vars=None, cat_vars=None, date_vars=None, hue=None, style='darkgrid', palette='coolwarm'):
+    """
+    This function generates various plots based on the input variables.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        The DataFrame containing the data to be visualized.
+    num_vars : list of str, optional
+        The names of the numerical variables to be plotted. Default is None.
+    cat_vars : list of str, optional
+        The names of the categorical variables to be plotted. Default is None.
+    date_vars : list of str, optional
+        The names of the date variables to be plotted. Default is None.
+    hue : list of str, optional
+        The names of the categorical variables to be used as hue for pairplot. Default is None.
+    style : str, optional
+        The style of the plots. Default is 'darkgrid'. Options are: darkgrid,whitegrid,dark,white,ticks
+    palette : str or list, optional
+        The color palette to use for the plots. Default is 'coolwarm'.
+    
+    Returns:
+    --------
+    None
+    """
+    def reorder_categories(df, cat_var):
+        # Get the ordered categories based on frequency
+        ordered_categories = list(df[cat_var].value_counts().index)
+        # Convert to categorical and reorder categories
+        df[cat_var] = df[cat_var].astype("category")
+        df[cat_var] = df[cat_var].cat.reorder_categories(new_categories=ordered_categories)
+        return df
+
+    # Reorder categories for all categorical variables at once
+    if cat_vars:
+        for cat_var in cat_vars:
+            df = reorder_categories(df, cat_var)
+        
+    # Set the style and palette
+    sns.set_style(style)
+    if palette == 'custom_coolwarm':
+        sns.set_palette(sns.color_palette('coolwarm', 15))
+    elif palette == 'custom_blend':
+        deep_pal = sns.color_palette('deep')
+        sns.set_palette(sns.blend_palette([deep_pal[3], deep_pal[2]], 15))
+    else:
+        sns.set_palette(palette)
+      
+    if num_vars:
+        if hue:
+            for hue_var in hue:
+                # Pairplot with hue for each categorical variable in hue
+                plt.figure(figsize=(10, 6))
+                sns.pairplot(data=df, vars=num_vars, kind='scatter', hue=hue_var, palette='RdBu', diag_kws={'alpha':.5})
+                plt.suptitle(f'Pairplot of {", ".join(num_vars)} with hue on {hue_var}', y=1.02)
+                plt.show()
+                plt.clf()
+        else:
+            # Pairplot without hue (existing code)
+            plt.figure(figsize=(10, 6))
+            sns.pairplot(data=df, vars=num_vars)
+            plt.suptitle(f'Pairplot of {", ".join(num_vars)}', y=1.02)
+            plt.show()
+            plt.clf()
+            
+    if num_vars and hue:
+        for num_var in num_vars:
+            for hue_var in hue:
+                # Standard KDE plot
+                plt.figure(figsize=(10, 6))
+                sns.kdeplot(data=df, x=num_var, hue=hue_var)
+                plt.title(f'KDE Plot of {num_var} with hue on {hue_var}')
+                plt.show()
+                plt.clf()
+
+                # KDE plot with cut=0
+                plt.figure(figsize=(10, 6))
+                sns.kdeplot(data=df, x=num_var, hue=hue_var, cut=0)
+                plt.title(f'KDE Plot of {num_var} with hue on {hue_var} (cut=0)')
+                plt.show()
+                plt.clf()
+
+                # Cumulative KDE plot with cut=0
+                plt.figure(figsize=(10, 6))
+                sns.kdeplot(data=df, x=num_var, hue=hue_var, cut=0, cumulative=True)
+                plt.title(f'Cumulative KDE Plot of {num_var} with hue on {hue_var} (cut=0)')
+                plt.show()
+                plt.clf()
+
+    if cat_vars and num_vars:
+        for cat_var in cat_vars:
+            for num_var in num_vars:
+                # Boxplot for each combination of categorical and numerical variables
+                plt.figure(figsize=(10, 6))
+                ax = sns.boxplot(data=df, x=cat_var, y=num_var)
+                plt.title(f'Boxplot of {num_var} by {cat_var}')
+                ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
+                plt.show()
+                plt.clf()
+                # Create and display a violinplot
+                plt.figure(figsize=(10, 6))
+                sns.violinplot(data=df, x=num_var, y=cat_var)
+                plt.title(f'Violinplot of {num_var} by {cat_var}')
+                plt.show()
+                plt.clf()
+    
+    if cat_vars and num_vars:
+        for num_var in num_vars:
+            for cat_var_permutation in permutations(cat_vars, 2):  # 2 for pairs
+                y_var, hue_var = cat_var_permutation
+                # Create and display a swarmplot
+                plt.figure(figsize=(10, 6))
+                sns.stripplot(data=df, x=num_var, y=y_var, hue=hue_var, jitter=True)
+                plt.title(f'Stripplot of {num_var} by {y_var} with hue {hue_var}')
+                plt.show()
+                plt.clf()
+               
+    if cat_vars and num_vars:
+        for cat_var in cat_vars:
+            for num_var_permutation in permutations(num_vars, 2):  # 2 for pairs
+                x_var, y_var = num_var_permutation
+                # Check if any variable contains "_YYYY" and set it to the x-axis
+                if "_YYYY" in x_var:
+                    pass  # x_var is already set to the variable containing "_YYYY"
+                elif "_YYYY" in y_var:
+                    x_var, y_var = y_var, x_var  # Swap x_var and y_var
+                # lmplot for each combination of numerical variables
+                plt.figure(figsize=(10, 6))
+                sns.lmplot(data=df, x=x_var, y=y_var, hue=cat_var)
+                plt.title(f'Lmplot of {x_var} by {y_var} with hue {cat_var}')
+                plt.show()
+                plt.clf()
+                # Lineplot for each combination of numerical variables
+                plt.figure(figsize=(10, 6))
+                sns.lineplot(data=df, x=x_var, y=y_var, hue=cat_var)
+                plt.title(f'Lineplot of {x_var} by {y_var} with hue {cat_var}')
+                plt.show()
+                plt.clf()            
+            
+    if num_vars:
+        for num_var_permutation in permutations(num_vars, 2):  # 2 for pairs
+            x_var, y_var = num_var_permutation
+            
+            # Jointplot with regression line
+            plt.figure(figsize=(10, 6))
+            sns.jointplot(data=df, x=x_var, y=y_var, kind='reg')
+            plt.suptitle(f'Regression Plot of {y_var} vs {x_var}', y=1.02)
+            plt.show()
+            plt.clf()
+            
+            # Jointplot with regression line (2nd order polynomial)
+            plt.figure(figsize=(10, 6))
+            sns.jointplot(data=df, x=x_var, y=y_var, kind='reg', order=2, xlim=(df[x_var].min(), df[x_var].max()), ylim=(df[y_var].min(), df[y_var].max()))
+            plt.suptitle(f'2nd Order Polynomial Regression Plot of {y_var} vs {x_var}', y=1.02)
+            plt.show()
+            plt.clf()
+            
+            # Jointplot showing the residuals
+            plt.figure(figsize=(10, 6))
+            sns.jointplot(data=df, x=x_var, y=y_var, kind='resid', order=2)
+            plt.suptitle(f'Residuals Plot of {y_var} vs {x_var}', y=1.02)
+            plt.show()
+            plt.clf()
+            
+            # Jointplot with scatter and kdeplot
+            plt.figure(figsize=(10, 6))
+            g = sns.jointplot(data=df, x=x_var, y=y_var, kind='scatter', marginal_kws=dict(bins=10))
+            g.plot_joint(sns.kdeplot)
+            plt.suptitle(f'Scatter and KDE Plot of {y_var} vs {x_var}', y=1.02)
+            plt.show()
+            plt.clf()
