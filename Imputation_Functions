@@ -1,0 +1,236 @@
+import numpy as np
+import pandas as pd
+
+def random_sampling_imputation2(df, columns, seed=0):
+    """
+    Imputes missing values in specified columns of a DataFrame using Random Sampling Imputation,
+    attempting to preserve key statistical moments for the imputed values.
+    Only the NaN values in the specified columns will be imputed.
+
+    Parameters:
+        df (pd.DataFrame): The input DataFrame.
+        columns (list): Column names for imputation.
+        seed (int): Seed for random number generator for reproducibility.
+
+    Returns:
+        pd.DataFrame: DataFrame with missing values imputed.
+    """
+    np.random.seed(seed)
+    imputed_df = df.copy()
+
+    for col in columns:
+        # Calculate original statistics for non-missing values
+        original_values = imputed_df[col].dropna()
+        original_mean = original_values.mean()
+        original_std = original_values.std()
+
+        # Perform Random Sampling Imputation only on missing values
+        missing_mask = imputed_df[col].isna()
+        num_missing = missing_mask.sum()
+
+        if num_missing > 0:
+            random_samples = np.random.choice(original_values, size=num_missing)
+            imputed_df.loc[missing_mask, col] = random_samples
+
+            # Calculate new statistics after imputation
+            new_mean = imputed_df[col].mean()
+            new_std = imputed_df[col].std()
+
+            # Adjust imputed values if necessary to match original mean and std
+            if not np.isclose(new_mean, original_mean) or not np.isclose(new_std, original_std):
+                # Adjust only the imputed values
+                adjustment_factor = original_std / new_std
+                adjusted_values = (imputed_df.loc[missing_mask, col] - new_mean) * adjustment_factor + original_mean
+                imputed_df.loc[missing_mask, col] = adjusted_values
+
+    return imputed_df
+
+# List of columns to impute
+columns_to_impute = [
+    'Número_Robos_6',
+    'Número_Robos_Inmuebles_7',
+    'Número_Robos_Domicilio_7',
+    'Número_Total_Infracciónes_Penales'
+]
+
+# Apply the function to your DataFrame
+renta_extended3 = random_sampling_imputation2(renta_extended, columns_to_impute)
+
+
+
+from sklearn.impute import KNNImputer
+import pandas as pd
+
+def knn_imputation(df, columns, n_neighbors=5):
+    """
+    Imputes missing values in specified columns of a DataFrame using KNN Imputation.
+
+    Parameters:
+        df (pd.DataFrame): The input DataFrame.
+        columns (list): Column names for imputation.
+        n_neighbors (int): Number of neighbors to use for imputation.
+
+    Returns:
+        pd.DataFrame: DataFrame with missing values imputed using KNN Imputer.
+    """
+    imputed_df = df.copy()
+    
+    # Initialize the KNN Imputer with specified number of neighbors
+    imputer = KNNImputer(n_neighbors=n_neighbors)
+
+    for col in columns:
+        # Check if the column has missing values
+        if imputed_df[col].isna().any():
+            # Apply KNN imputation to the column
+            imputed_df[col] = imputer.fit_transform(imputed_df[[col]]).ravel()
+
+    return imputed_df
+
+# List of columns to impute
+columns_to_impute = [
+    'Número_Robos_6',
+    'Número_Robos_Inmuebles_7',
+    'Número_Robos_Domicilio_7',
+    'Número_Total_Infracciónes_Penales'
+]
+
+# Apply the function to your DataFrame
+renta_extended4 = knn_imputation(renta_extended, columns_to_impute)
+#Glimpse(renta_extended4)
+
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+def compare_distributions(dataframes, columns):
+    """
+    Compare the distributions and statistics of specified columns across multiple DataFrames.
+
+    Parameters:
+        dataframes (dict): A dictionary of DataFrames with labels.
+        columns (list): A list of columns to compare.
+
+    Returns:
+        A dictionary containing the statistical comparison and plots the distributions.
+    """
+    stats_dict = {}
+
+    # Calculate and print statistics for each DataFrame
+    for label, df in dataframes.items():
+        print(f"Statistics for DataFrame: {label}")
+        stats = pd.DataFrame(index=columns, columns=['Mean', 'STD', 'VAR', 'Missing'])
+        for col in columns:
+            stats.loc[col, 'Mean'] = round(df[col].mean(), 2)
+            stats.loc[col, 'STD'] = round(df[col].std(), 2)
+            stats.loc[col, 'VAR'] = round(df[col].var(), 2)
+            stats.loc[col, 'Missing'] = df[col].isna().sum()
+        stats_dict[label] = stats
+        print(stats)
+        print("\n")
+
+    # Plot distributions
+    num_columns = 2  # Number of columns in the grid
+    num_rows = int(np.ceil(len(columns) / num_columns))  # Calculate the required number of rows
+
+    plt.figure(figsize=(8
+                        , 4 * num_rows))
+
+    for i, col in enumerate(columns):
+        plt.subplot(num_rows, num_columns, i + 1)
+        for label, df in dataframes.items():
+            # Updated to use 'fill' instead of 'shade'
+            sns.kdeplot(df[col], label=label, fill=True)
+        plt.title(f"Distribution for {col}")
+        plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+    return stats_dict
+
+# Example usage:
+# Assuming the DataFrames are named renta_extended, renta_extended3, renta_extended4 and are available in the environment.
+# The function can be called like this:
+#compare_distributions(
+#     {
+#         'Original': renta_extended,
+#         'Random_sampling': renta_extended3,
+#         'KNNImputer': renta_extended4
+#     },
+#     ['Número_Robos_6', 'Número_Robos_Inmuebles_7', 'Número_Robos_Domicilio_7', 'Número_Total_Infracciónes_Penales']
+# )
+
+compare_distributions(
+     {
+         'Original': renta_extended,
+         'Random_sampling': renta_extended3,
+         'KNNImputer': renta_extended4
+     },
+     ['Número_Robos_Domicilio_7']
+ )
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+def compare_distributions2(dataframes, columns):
+    """
+    Compare the distributions and statistics of specified columns across multiple DataFrames.
+
+    Parameters:
+        dataframes (dict): A dictionary of DataFrames with labels.
+        columns (list): A list of columns to compare.
+
+    Returns:
+        A DataFrame containing the statistical comparison and plots the distributions.
+    """
+    # Initialize a DataFrame to hold all statistics
+    all_stats = []
+
+    # Calculate statistics for each DataFrame
+    for label, df in dataframes.items():
+        for col in columns:
+            # Calculate statistics
+            stats = {
+                'DataFrame': label,
+                'Variable': col,
+                'Mean': round(df[col].mean(), 2),
+                'STD': round(df[col].std(), 2),
+                'VAR': round(df[col].var(), 2),
+                'Missing': df[col].isna().sum()
+            }
+            all_stats.append(stats)
+
+    # Convert list of dictionaries to DataFrame
+    stats_df = pd.DataFrame(all_stats)
+
+    # Display the statistics DataFrame
+    display(stats_df)
+
+    # Plot distributions
+    num_columns = 2  # Number of columns in the grid
+    num_rows = int(np.ceil(len(columns) / num_columns))  # Calculate the required number of rows
+
+    plt.figure(figsize=(8, 4 * num_rows))
+
+    for i, col in enumerate(columns):
+        plt.subplot(num_rows, num_columns, i + 1)
+        for label, df in dataframes.items():
+            sns.kdeplot(df[col], label=label, fill=True)
+        plt.title(f"Distribution for {col}")
+        plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+    return stats_df
+
+# Example usage
+compare_distributions2(
+     {
+         'Original': renta_extended,
+         'Random_sampling': renta_extended3,
+         'KNNImputer': renta_extended4
+     },
+     ['Número_Robos_Domicilio_7'])
+
+
